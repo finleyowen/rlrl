@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::f32::consts::E;
 use std::fmt::Display;
 use std::rc::Rc;
 
@@ -55,6 +56,26 @@ impl<T> TokenQueue<T> {
         Ok(token)
     }
 
+    /// Borrow the last token consumed.
+    pub fn prev(&self) -> Result<&T, ParseError> {
+        self.tokens
+            .get(self.idx - 1)
+            .ok_or(ParseError::new(SYNTAX_ERROR_MSG))
+    }
+
+    /// Consume the front token if it returns `true` when passed to `f`,
+    /// otherwise return an error.
+    pub fn consume_matching(
+        &mut self,
+        f: fn(&T) -> bool,
+    ) -> Result<&T, ParseError> {
+        if !self.peek().map_or(false, f) {
+            return Err(ParseError::new(SYNTAX_ERROR_MSG));
+        }
+        self.increment();
+        Ok(self.prev()?)
+    }
+
     /// Go to the next token by incrementing the index.
     pub fn increment(&mut self) {
         self.idx += 1
@@ -69,7 +90,7 @@ impl<T> TokenQueue<T> {
 impl<T: PartialEq> TokenQueue<T> {
     /// Consume a token that is equal to token `token`, returning an error if the
     /// front token in the queue doesn't equal `token`.
-    pub fn consume_token(&mut self, token: T) -> Result<(), ParseError> {
+    pub fn consume_eq(&mut self, token: T) -> Result<(), ParseError> {
         if self.peek()? == &token {
             self.increment();
             return Ok(());

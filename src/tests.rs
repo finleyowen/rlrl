@@ -172,7 +172,7 @@ impl TryFrom<&mut TokenQueue<Token>> for IntRange {
 
     fn try_from(tq: &mut TokenQueue<Token>) -> Result<Self, Self::Error> {
         // consume '<'
-        tq.consume_token(Token::OAngle)?;
+        tq.consume_eq(Token::OAngle)?;
 
         // consume optional integer (min)
         let min = match *tq.peek()? {
@@ -185,7 +185,7 @@ impl TryFrom<&mut TokenQueue<Token>> for IntRange {
         };
 
         // consume comma
-        tq.consume_token(Token::Comma)?;
+        tq.consume_eq(Token::Comma)?;
 
         // consume optional integer (max)
         let max = match *tq.peek()? {
@@ -198,7 +198,7 @@ impl TryFrom<&mut TokenQueue<Token>> for IntRange {
         };
 
         // consume '>'
-        tq.consume_token(Token::CAngle)?;
+        tq.consume_eq(Token::CAngle)?;
 
         return Ok(Self { min: min, max: max });
     }
