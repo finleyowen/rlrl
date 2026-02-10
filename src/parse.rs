@@ -1,9 +1,8 @@
-use std::collections::LinkedList;
 use std::error::Error;
 use std::fmt::Display;
+use std::rc::Rc;
 
-const MISSING_VALUE_MSG: &str = "Missing required value!";
-const COULD_NOT_MATCH_MSG: &str = "No match found!";
+const SYNTAX_ERROR_MSG: &str = "Syntax error!";
 
 /// Convenience type implementing [std::error::Error] storing an error message.
 #[derive(Debug)]
@@ -23,53 +22,68 @@ impl<'a> Display for ParseError {
 
 impl<'a> Error for ParseError {}
 
-/// Wrapper around `LinkedList<T>` exposing the functionality needed for
+/// Wrapper around `Vec<T>` exposing the functionality needed for
 /// parsing.
 pub struct TokenQueue<T> {
-    tokens: LinkedList<T>,
+    tokens: Rc<Vec<T>>,
+    idx: usize,
 }
 
 impl<T> TokenQueue<T> {
     /// Create a new [TokenQueue].
-    pub fn new(tokens: LinkedList<T>) -> Self {
-        Self { tokens: tokens }
-    }
-
-    /// Pop a token from the queue.
-    pub fn pop(&mut self) -> Result<T, ParseError> {
-        self.tokens
-            .pop_front()
-            .ok_or(ParseError::new(MISSING_VALUE_MSG))
-    }
-
-    /// Pop the first token if the function `f` returns true when called on the
-    /// token, otherwise return an error value.
-    pub fn pop_matching(&mut self, f: fn(&T) -> bool) -> Result<T, ParseError> {
-        let token = self
-            .tokens
-            .pop_front()
-            .ok_or(ParseError::new(MISSING_VALUE_MSG))?;
-        if !f(&token) {
-            return Err(ParseError::new(COULD_NOT_MATCH_MSG));
+    pub fn new(tokens: Vec<T>) -> Self {
+        Self {
+            tokens: Rc::new(tokens),
+            idx: 0,
         }
-        Ok(token)
     }
 
     /// Borrow the front token from the queue.
     pub fn peek(&self) -> Result<&T, ParseError> {
         self.tokens
-            .front()
-            .ok_or(ParseError::new("Couldn't peek a required value!"))
+            .get(self.idx)
+            .ok_or(ParseError::new(SYNTAX_ERROR_MSG))
     }
 
-    /// Borrow the token at index `i` from the queue.
-    pub fn peek_ith(&self, i: usize) -> Option<&T> {
-        self.tokens.iter().nth(i)
+    /// Borrow the front token if it returns `true` when passed to `f`,
+    /// otherwise return an error.
+    pub fn peek_matching(&self, f: fn(&T) -> bool) -> Result<&T, ParseError> {
+        let token = self.peek()?;
+        if !f(token) {
+            return Err(ParseError::new(SYNTAX_ERROR_MSG));
+        }
+        Ok(token)
     }
 
-    /// Borrow the first `i` tokens from the queue.
-    pub fn peek_i(&self, i: usize) -> Vec<&T> {
-        self.tokens.iter().take(i).collect()
+    /// Go to the next token by incrementing the index.
+    pub fn increment(&mut self) {
+        self.idx += 1
+    }
+
+    /// Go to the token at position `i`.
+    pub fn go_to(&mut self, i: usize) {
+        self.idx = i;
+    }
+}
+
+impl<T: PartialEq> TokenQueue<T> {
+    /// Consume a token that is equal to token `token`, returning an error if the
+    /// front token in the queue doesn't equal `token`.
+    pub fn consume_token(&mut self, token: T) -> Result<(), ParseError> {
+        if self.peek()? == &token {
+            self.increment();
+            return Ok(());
+        }
+        Err(ParseError::new(SYNTAX_ERROR_MSG))
+    }
+}
+
+impl<T> Clone for TokenQueue<T> {
+    fn clone(&self) -> Self {
+        Self {
+            tokens: self.tokens.clone(),
+            idx: self.idx,
+        }
     }
 }
 

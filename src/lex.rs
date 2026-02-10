@@ -1,5 +1,7 @@
-use regex::{Match, Regex};
-use std::{collections::LinkedList, error::Error, fmt::Display};
+use regex::Match;
+use regex::Regex;
+use std::error::Error;
+use std::fmt::Display;
 
 /// Convenience type implementing [std::error::Error] storing an error message.
 #[derive(Debug)]
@@ -57,12 +59,13 @@ impl<T> Lexer<T> {
 
     pub fn add_rule(&mut self, pat: &str, handler: Handler<T>) {
         self.rules.push(LexerRule {
-            pat: Regex::new(pat).expect("Invalid regexp passed to Lexer::add_rule"),
+            pat: Regex::new(pat)
+                .expect("Invalid regexp passed to Lexer::add_rule"),
             handler,
         });
     }
 
-    pub fn lex(&self, s: &str) -> Result<LinkedList<T>, Box<dyn Error>> {
+    pub fn lex(&self, s: &str) -> Result<Vec<T>, Box<dyn Error>> {
         let mut match_len: Vec<usize> = vec![0; s.len()];
         let mut matches: Vec<LexerMatch<T>> = Vec::new();
 
@@ -105,15 +108,11 @@ impl<T> Lexer<T> {
 
         // sort matches by start location
         matches.sort_by(|a, b| a.pos.cmp(&b.pos));
-        // Ok(matches)
 
-        // extract and return tokens
-        let mut tokens: LinkedList<T> = LinkedList::new();
-        for lexer_match in matches {
-            tokens.push_back(lexer_match.token);
-        }
-
-        Ok(tokens)
+        Ok(matches
+            .into_iter()
+            .map(|lexer_match| lexer_match.token)
+            .collect())
     }
 }
 

@@ -1,11 +1,13 @@
+#![allow(dead_code)]
+
 use crate::lex::LexResult;
 use crate::lex::Lexer;
 use crate::parse::ParseError;
 use crate::parse::TokenQueue;
-use std::collections::LinkedList;
 use std::error::Error;
 use std::i32;
 
+/// An enum representing the tokens available to the lexer
 #[derive(PartialEq)]
 enum Token {
     // chars
@@ -32,6 +34,7 @@ enum Token {
 }
 
 impl Token {
+    // helper function for handling identifiers
     pub fn is_ident_tok(&self) -> bool {
         if let Self::Ident(_) = self {
             return true;
@@ -39,6 +42,7 @@ impl Token {
         false
     }
 
+    // helper function for handling identifiers
     pub fn get_ident(&self) -> Result<&String, ParseError> {
         if let Self::Ident(ident) = self {
             return Ok(ident);
@@ -47,30 +51,7 @@ impl Token {
     }
 }
 
-#[derive(PartialEq)]
-enum DataTypeInfo {
-    Int(Option<i32>, Option<i32>),
-    Double(Option<f64>, Option<f64>),
-    String(Option<i32>, Option<i32>),
-}
-
-impl TryFrom<&mut TokenQueue<Token>> for DataTypeInfo {
-    type Error = ParseError;
-
-    fn try_from(value: &mut TokenQueue<Token>) -> Result<Self, Self::Error> {
-        let ident_tok = value.pop_matching(|tok| tok.is_ident_tok())?;
-        let ident = ident_tok.get_ident()?;
-
-        match ident.as_str() {
-            "int" => Ok(DataTypeInfo::Int(None, None)),
-            "double" => Ok(DataTypeInfo::Double(None, None)),
-            "str" => Ok(DataTypeInfo::String(None, None)),
-            _ => Err(ParseError::new("Couldn't parse type")),
-        }
-    }
-}
-
-// setup the lexer for testing
+/// Function to setup the lexer for testing
 fn setup_test_lexer() -> Lexer<Token> {
     let mut lexer: Lexer<Token> = Lexer::new();
 
@@ -115,25 +96,32 @@ fn setup_test_lexer() -> Lexer<Token> {
     });
 
     lexer.add_rule(".", |re_match| {
-        LexResult::Error(format!("Unmatched input at position {}", re_match.start()).into())
+        LexResult::Error(
+            format!("Unmatched input at position {}", re_match.start()).into(),
+        )
     });
 
     lexer
 }
 
-// test the lexer
+/// Test the lexer
 #[test]
-fn lexer_test() {
+fn lex_test() {
     let lexer = setup_test_lexer();
 
     assert!(
         lexer.lex("({})").unwrap()
-            == LinkedList::from([Token::OParen, Token::OBrace, Token::CBrace, Token::CParen])
+            == Vec::from([
+                Token::OParen,
+                Token::OBrace,
+                Token::CBrace,
+                Token::CParen
+            ])
     );
 
     assert!(
         lexer.lex("({}, {})").unwrap()
-            == LinkedList::from([
+            == Vec::from([
                 Token::OParen,
                 Token::OBrace,
                 Token::CBrace,
@@ -146,7 +134,7 @@ fn lexer_test() {
 
     assert!(
         lexer.lex("fn my_function() {}").unwrap()
-            == LinkedList::from([
+            == Vec::from([
                 Token::FnKwd,
                 Token::Ident("my_function".into()),
                 Token::OParen,
@@ -157,10 +145,10 @@ fn lexer_test() {
     );
 
     assert!(
-        lexer.lex("type i1to5 = int<1,5>").unwrap()
-            == LinkedList::from([
+        lexer.lex("type int1to5 = int<1,5>").unwrap()
+            == Vec::from([
                 Token::TypeKwd,
-                Token::Ident("i1to5".into()),
+                Token::Ident("int1to5".into()),
                 Token::Equals,
                 Token::Ident("int".into()),
                 Token::OAngle,
@@ -172,14 +160,63 @@ fn lexer_test() {
     );
 }
 
+/// A struct we will try and parse from strings like "<5, 10>" or "<, 10>"
+#[derive(PartialEq)]
+struct IntRange {
+    min: Option<i32>,
+    max: Option<i32>,
+}
+
+impl TryFrom<&mut TokenQueue<Token>> for IntRange {
+    type Error = ParseError;
+
+    fn try_from(tq: &mut TokenQueue<Token>) -> Result<Self, Self::Error> {
+        // consume '<'
+        tq.consume_token(Token::OAngle)?;
+
+        // consume optional integer (min)
+        let min = match *tq.peek()? {
+            Token::IntLiteral(val) => {
+                tq.increment();
+                Some(val)
+            }
+            Token::Comma => None,
+            _ => return Err(ParseError::new("")),
+        };
+
+        // consume comma
+        tq.consume_token(Token::Comma)?;
+
+        // consume optional integer (max)
+        let max = match *tq.peek()? {
+            Token::IntLiteral(val) => {
+                tq.increment();
+                Some(val)
+            }
+            Token::CAngle => None,
+            _ => return Err(ParseError::new("")),
+        };
+
+        // consume '>'
+        tq.consume_token(Token::CAngle)?;
+
+        return Ok(Self { min: min, max: max });
+    }
+}
+
+/// Test the parsing functionality
 #[test]
-fn token_queue_test() -> Result<(), Box<dyn Error>> {
+fn parse_test() -> Result<(), Box<dyn Error>> {
     let lexer = setup_test_lexer();
 
-    let mut tq = TokenQueue::new(lexer.lex("int<,>")?);
+    let mut tq = TokenQueue::new(lexer.lex("<5,10>")?);
 
     assert!(
-        DataTypeInfo::try_from(&mut tq).expect("Didn't parse") == DataTypeInfo::Int(None, None)
+        IntRange::try_from(&mut tq)?
+            == IntRange {
+                min: Some(5),
+                max: Some(10)
+            }
     );
 
     Ok(())
