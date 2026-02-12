@@ -91,6 +91,18 @@ impl<T> TokenQueue<T> {
     }
 }
 
+impl<L> TokenQueue<L> {
+    /// Parse a value of type `T` from the token queue. Update the token queue's
+    /// index with the index returned by the `parse_fn`.
+    pub fn parse<T>(
+        &mut self,
+        parse_fn: ParseFn<L, T>,
+    ) -> Result<T, Box<dyn Error>> {
+        let (val, index) = parse_fn(self)?;
+        self.go_to(index);
+        Ok(val)
+    }
+}
 impl<T: PartialEq> TokenQueue<T> {
     /// Consume a token that is equal to token `token`, returning an error if the
     /// front token in the queue doesn't equal `token`.
