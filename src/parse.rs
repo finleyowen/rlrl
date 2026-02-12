@@ -45,6 +45,12 @@ impl<T> TokenQueue<T> {
             .ok_or(ParseError::new(SYNTAX_ERROR_MSG))
     }
 
+    /// Consume the front token in the queue.
+    pub fn consume(&mut self) -> Result<&T, ParseError> {
+        self.increment();
+        self.peek()
+    }
+
     /// Borrow the front token if it returns `true` when passed to `f`,
     /// otherwise return an error.
     pub fn peek_matching(&self, f: fn(&T) -> bool) -> Result<&T, ParseError> {
@@ -103,6 +109,7 @@ impl<L> TokenQueue<L> {
         Ok(val)
     }
 }
+
 impl<T: PartialEq> TokenQueue<T> {
     /// Consume a token that is equal to token `token`, returning an error if the
     /// front token in the queue doesn't equal `token`.
