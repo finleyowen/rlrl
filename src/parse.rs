@@ -112,5 +112,12 @@ impl<T> Clone for TokenQueue<T> {
     }
 }
 
+/// Convenience type to return from parse functions
+pub type ParseResult<T> = Result<(T, usize), Box<dyn Error>>;
+
+/// A function that parses an item of type `T` from a queue of tokens with type
+/// `L`
+pub type ParseFn<L, T> = fn(&TokenQueue<L>) -> ParseResult<T>;
+
 #[cfg(test)]
 mod tests {}
