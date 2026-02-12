@@ -84,6 +84,11 @@ impl<T> TokenQueue<T> {
     pub fn go_to(&mut self, i: usize) {
         self.idx = i;
     }
+
+    /// Get the index of the current token.
+    pub fn get_idx(&self) -> usize {
+        self.idx
+    }
 }
 
 impl<T: PartialEq> TokenQueue<T> {
