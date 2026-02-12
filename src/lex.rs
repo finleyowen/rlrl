@@ -44,7 +44,8 @@ impl<T> LexerRule<T> {
 /// Represents a match discovered during lexing.
 pub struct LexerMatch<T> {
     token: T,
-    pos: usize,
+    start: usize,
+    len: usize,
 }
 
 /// Represents a lexer that lexes tokens of type `T`.
@@ -66,7 +67,7 @@ impl<T> Lexer<T> {
     }
 
     pub fn lex(&self, s: &str) -> Result<Vec<T>, Box<dyn Error>> {
-        let mut match_len: Vec<usize> = vec![0; s.len()];
+        let mut match_info: Vec<(usize, usize)> = vec![(0, 0); s.len()];
         let mut matches: Vec<LexerMatch<T>> = Vec::new();
 
         // for each rule
@@ -76,28 +77,43 @@ impl<T> Lexer<T> {
                 let mut takes_priority = true;
                 // for each position in the match
                 for i in re_match.start()..re_match.end() {
-                    // if longer or equal-length match already occupies this
-                    // position
-                    if match_len[i] >= re_match.len() {
+                    // extract info about conflicting match
+                    let (confl_start, confl_len) = match_info[i];
+                    // note confl_len = 0 if no conflicting match exists
+                    if confl_len >= re_match.len() {
                         // a match that was already found has a length gte this
                         // one
                         takes_priority = false;
                         // stop looking for overlapping matches because we're
                         // not keeping this match anyway
                         break;
+                    } else if confl_len > 0 {
+                        // a match already exists and it's shorter than this
+                        // one => remove it from the arrays
+                        for i in confl_start..confl_start + confl_len {
+                            match_info[i] = (0, 0);
+                        }
+                        matches = matches
+                            .into_iter()
+                            .filter(|lexer_match| {
+                                !(lexer_match.start == confl_start
+                                    && lexer_match.len == confl_len)
+                            })
+                            .collect();
                     }
                 }
                 if takes_priority {
                     // got through the loop without finding an overlapping
                     // match - update the match_len array
                     for i in re_match.start()..re_match.end() {
-                        match_len[i] = re_match.len();
+                        match_info[i] = (re_match.start(), re_match.len());
                     }
                     // try handling the match and adding it to the list
                     match rule.handle(re_match) {
                         LexResult::Token(t) => matches.push(LexerMatch {
                             token: t,
-                            pos: re_match.start(),
+                            start: re_match.start(),
+                            len: re_match.len(),
                         }),
                         LexResult::Ignore => {}
                         LexResult::Error(e) => return Err(e),
@@ -107,7 +123,7 @@ impl<T> Lexer<T> {
         }
 
         // sort matches by start location
-        matches.sort_by(|a, b| a.pos.cmp(&b.pos));
+        matches.sort_by(|a, b| a.start.cmp(&b.start));
 
         Ok(matches
             .into_iter()
@@ -117,4 +133,49 @@ impl<T> Lexer<T> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::lex::{LexResult, Lexer};
+    use std::error::Error;
+
+    #[derive(PartialEq, Debug)]
+    enum Token {
+        IntLiteral(i32),
+        DblLiteral(f64),
+    }
+
+    fn setup_lexer() -> Lexer<Token> {
+        let mut lexer = Lexer::new();
+
+        lexer.add_rule(r"[\s\t\n]", |_| LexResult::Ignore);
+        lexer.add_rule(r"\-?[0-9]+", |int_match| {
+            match int_match.as_str().parse::<i32>() {
+                Ok(val) => LexResult::Token(Token::IntLiteral(val)),
+                Err(err) => LexResult::Error(err.into()),
+            }
+        });
+        lexer.add_rule(r"\-?[0-9]+(\.[0-9]+)", |dbl_match| {
+            match dbl_match.as_str().parse::<f64>() {
+                Ok(val) => LexResult::Token(Token::DblLiteral(val)),
+                Err(err) => LexResult::Error(err.into()),
+            }
+        });
+
+        lexer
+    }
+
+    #[test]
+    fn test_lexer() -> Result<(), Box<dyn Error>> {
+        let lexer = setup_lexer();
+
+        assert!(
+            lexer.lex("9 0.9 1.0")?
+                == vec![
+                    Token::IntLiteral(9),
+                    Token::DblLiteral(0.9),
+                    Token::DblLiteral(1.0)
+                ]
+        );
+
+        Ok(())
+    }
+}
