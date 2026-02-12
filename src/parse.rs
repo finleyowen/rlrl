@@ -48,7 +48,7 @@ impl<T> TokenQueue<T> {
     /// Consume the front token in the queue.
     pub fn consume(&mut self) -> Result<&T, ParseError> {
         self.increment();
-        self.peek()
+        self.prev()
     }
 
     /// Borrow the front token if it returns `true` when passed to `f`,
