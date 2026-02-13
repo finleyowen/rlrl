@@ -95,6 +95,11 @@ impl<T> TokenQueue<T> {
     pub fn get_idx(&self) -> usize {
         self.idx
     }
+
+    /// Return true when the token queue has no tokens left.
+    pub fn is_consumed(&self) -> bool {
+        self.idx == self.tokens.len()
+    }
 }
 
 impl<L> TokenQueue<L> {
