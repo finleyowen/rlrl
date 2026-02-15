@@ -1,19 +1,6 @@
+use anyhow;
 use regex::Match;
 use regex::Regex;
-use std::error::Error;
-use std::fmt::Display;
-
-/// Convenience type implementing [std::error::Error] storing an error message.
-#[derive(Debug)]
-pub struct LexError<'a>(&'a str);
-
-impl<'a> Display for LexError<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "LexError: {}", self.0)
-    }
-}
-
-impl<'a> Error for LexError<'a> {}
 
 /// Represents possible outcomes when trying to lex a token of type `T`.
 pub enum LexResult<T> {
@@ -22,17 +9,17 @@ pub enum LexResult<T> {
     /// The input was ignored
     Ignore,
     /// An error occurred lex the token
-    Error(Box<dyn Error>),
+    Error(anyhow::Error),
 }
 
 /// Function that accepts a [regex::Match] and tries to lex a token of type `T`
 /// from it.
-pub type Handler<T> = fn(Match) -> LexResult<T>;
+pub type MatchHandler<T> = fn(Match) -> LexResult<T>;
 
 /// Represents a rule in a lexer that lexes tokens of type `T`.
 pub struct LexerRule<T> {
     pat: Regex,
-    handler: Handler<T>,
+    handler: MatchHandler<T>,
 }
 
 impl<T> LexerRule<T> {
@@ -58,7 +45,7 @@ impl<T> Lexer<T> {
         Self { rules: Vec::new() }
     }
 
-    pub fn add_rule(&mut self, pat: &str, handler: Handler<T>) {
+    pub fn add_rule(&mut self, pat: &str, handler: MatchHandler<T>) {
         self.rules.push(LexerRule {
             pat: Regex::new(pat)
                 .expect("Invalid regexp passed to Lexer::add_rule"),
@@ -66,7 +53,7 @@ impl<T> Lexer<T> {
         });
     }
 
-    pub fn lex(&self, s: &str) -> Result<Vec<T>, Box<dyn Error>> {
+    pub fn lex(&self, s: &str) -> anyhow::Result<Vec<T>> {
         let mut match_info: Vec<(usize, usize)> = vec![(0, 0); s.len()];
         let mut matches: Vec<LexerMatch<T>> = Vec::new();
 
@@ -104,7 +91,7 @@ impl<T> Lexer<T> {
                 }
                 if takes_priority {
                     // got through the loop without finding an overlapping
-                    // match - update the match_len array
+                    // match - update the match_info array
                     for i in re_match.start()..re_match.end() {
                         match_info[i] = (re_match.start(), re_match.len());
                     }
@@ -119,6 +106,15 @@ impl<T> Lexer<T> {
                         LexResult::Error(e) => return Err(e),
                     }
                 }
+            }
+        }
+
+        // ensure all input is matched
+        for (start, len) in match_info {
+            if start == 0 && len == 0 {
+                return Err(anyhow::anyhow!(
+                    "Unmatched input at position {start}!",
+                ));
             }
         }
 
