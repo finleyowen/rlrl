@@ -5,6 +5,15 @@ use std::rc::Rc;
 const TOKEN_QUEUE_EMPTY_MSG: &str = "Couldn't get token from empty TokenQueue!";
 const TOKEN_DID_NOT_MATCH_MSG: &str = "Token didn't match required format!";
 
+/// A function that parses an item of type `T` from a queue of tokens with type
+/// `L`
+pub type ParseFn<L, T> = fn(&TokenQueue<L>) -> ParseResult<T>;
+
+pub type ParseWithFn<L, C, T> = fn(&TokenQueue<L>, &C) -> ParseResult<T>;
+
+/// Convenience type to return from parse functions
+pub type ParseResult<T> = anyhow::Result<(T, usize)>;
+
 /// Wrapper around `Vec<T>` exposing the functionality needed for
 /// parsing.
 #[derive(Clone)]
@@ -79,10 +88,25 @@ impl<T> TokenQueue<T> {
 }
 
 impl<L> TokenQueue<L> {
-    /// Parse a value of type `T` from the token queue. Update the token queue's
-    /// index with the index returned by the `parse_fn`.
+    /// Parse a value of type `T` from the token queue with tokens of type `L`.
+    /// Update the token queue's index with the index returned by the
+    /// `parse_fn`.
     pub fn parse<T>(&mut self, parse_fn: ParseFn<L, T>) -> anyhow::Result<T> {
         let (val, index) = parse_fn(self)?;
+        self.go_to(index);
+        Ok(val)
+    }
+
+    /// Parse a value of type `T` from the token queue with tokens of type `L`,
+    /// supporting a borrowed context parameter of type `C` which is passed.
+    /// Update the token queue's index with the index returned by the
+    /// `parse_fn`.
+    pub fn parse_with<T, C>(
+        &mut self,
+        parse_with_fn: ParseWithFn<L, C, T>,
+        context: &C,
+    ) -> anyhow::Result<T> {
+        let (val, index) = parse_with_fn(self, context)?;
         self.go_to(index);
         Ok(val)
     }
@@ -122,10 +146,3 @@ where
         Ok(())
     }
 }
-
-/// Convenience type to return from parse functions
-pub type ParseResult<T> = anyhow::Result<(T, usize)>;
-
-/// A function that parses an item of type `T` from a queue of tokens with type
-/// `L`
-pub type ParseFn<L, T> = fn(&TokenQueue<L>) -> ParseResult<T>;
