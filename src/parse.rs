@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 const TOKEN_QUEUE_EMPTY_MSG: &str = "Couldn't get token from empty TokenQueue!";
 const TOKEN_DID_NOT_MATCH_MSG: &str = "Token didn't match required format!";
+const COULD_NOT_READ_PREV_MSG: &str = "Couldn't read prev token in TokenQueue.";
 
 /// A function that parses an item of type `T` from a queue of tokens with type
 /// `L`
@@ -34,7 +35,7 @@ impl<T> TokenQueue<T> {
 
     /// Consume the front token in the queue.
     pub fn consume(&mut self) -> anyhow::Result<&T> {
-        self.increment();
+        self.increment()?;
         self.prev()
     }
 
@@ -52,7 +53,7 @@ impl<T> TokenQueue<T> {
     pub fn prev(&self) -> anyhow::Result<&T> {
         self.tokens
             .get(self.idx - 1)
-            .ok_or(anyhow::anyhow!("Couldn't read prev token in TokenQueue."))
+            .ok_or(anyhow::anyhow!(COULD_NOT_READ_PREV_MSG))
     }
 
     /// Consume the front token if it returns `true` when passed to `f`,
@@ -64,18 +65,37 @@ impl<T> TokenQueue<T> {
         if !self.peek().map_or(false, f) {
             return Err(anyhow::anyhow!(TOKEN_DID_NOT_MATCH_MSG));
         }
-        self.increment();
+        self.increment()?;
         Ok(self.prev()?)
     }
 
+    pub fn validate_idx(&self, idx: usize) -> anyhow::Result<()> {
+        if idx >= self.tokens.len() {
+            return Err(anyhow::anyhow!("Prematurely reached end of input!"));
+        }
+        Ok(())
+    }
+
     /// Go to the next token by incrementing the index.
-    pub fn increment(&mut self) {
-        self.idx += 1
+    pub fn increment(&mut self) -> anyhow::Result<()> {
+        match self.validate_idx(self.idx + 1) {
+            Ok(_) => {
+                self.idx += 1;
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Go to the token at position `i`.
-    pub fn go_to(&mut self, i: usize) {
-        self.idx = i;
+    pub fn go_to(&mut self, idx: usize) -> anyhow::Result<()> {
+        match self.validate_idx(idx) {
+            Ok(_) => {
+                self.idx = idx;
+                Ok(())
+            }
+            Err(err) => Err(err),
+        }
     }
 
     /// Get the index of the current token.
@@ -95,7 +115,7 @@ impl<L> TokenQueue<L> {
     /// `parse_fn`.
     pub fn parse<T>(&mut self, parse_fn: ParseFn<L, T>) -> anyhow::Result<T> {
         let (val, index) = parse_fn(self)?;
-        self.go_to(index);
+        self.go_to(index)?;
         Ok(val)
     }
 
@@ -110,7 +130,7 @@ impl<L> TokenQueue<L> {
         context: &C,
     ) -> anyhow::Result<T> {
         let (val, index) = parse_with_fn(self, context)?;
-        self.go_to(index);
+        self.go_to(index)?;
         Ok(val)
     }
 
@@ -125,7 +145,7 @@ impl<L> TokenQueue<L> {
         context: &mut C,
     ) -> anyhow::Result<T> {
         let (val, index) = parse_with_mut_fn(self, context)?;
-        self.go_to(index);
+        self.go_to(index)?;
         Ok(val)
     }
 }
@@ -135,10 +155,10 @@ impl<T: PartialEq> TokenQueue<T> {
     /// front token in the queue doesn't equal `token`.
     pub fn consume_eq(&mut self, token: T) -> anyhow::Result<()> {
         if self.peek()? == &token {
-            self.increment();
+            self.increment()?;
             return Ok(());
         }
-        Err(anyhow::anyhow!("Couldn't consume a "))
+        Err(anyhow::anyhow!(TOKEN_DID_NOT_MATCH_MSG))
     }
 }
 
