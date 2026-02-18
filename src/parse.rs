@@ -11,6 +11,8 @@ pub type ParseFn<L, T> = fn(&TokenQueue<L>) -> ParseResult<T>;
 
 pub type ParseWithFn<L, C, T> = fn(&TokenQueue<L>, &C) -> ParseResult<T>;
 
+pub type ParseWithMutFn<L, C, T> = fn(&TokenQueue<L>, &mut C) -> ParseResult<T>;
+
 /// Convenience type to return from parse functions
 pub type ParseResult<T> = anyhow::Result<(T, usize)>;
 
@@ -98,15 +100,31 @@ impl<L> TokenQueue<L> {
     }
 
     /// Parse a value of type `T` from the token queue with tokens of type `L`,
-    /// supporting a borrowed context parameter of type `C` which is passed.
+    /// supporting a borrowed context parameter of type `C` which is passed to
+    /// the `parse_with_fn`.
     /// Update the token queue's index with the index returned by the
-    /// `parse_fn`.
+    /// `parse_with_fn`.
     pub fn parse_with<T, C>(
         &mut self,
         parse_with_fn: ParseWithFn<L, C, T>,
         context: &C,
     ) -> anyhow::Result<T> {
         let (val, index) = parse_with_fn(self, context)?;
+        self.go_to(index);
+        Ok(val)
+    }
+
+    /// Parse a value of type `T` from the token queue with tokens of type `L`,
+    /// supporting a mutable borrowed context parameter of type `C` which is
+    /// passed to the `parse_with_mut_fn`.
+    /// Update the token queue's index with the index returned by the
+    /// `parse_with_mut_fn`.
+    pub fn parse_with_mut<T, C>(
+        &mut self,
+        parse_with_mut_fn: ParseWithMutFn<L, C, T>,
+        context: &mut C,
+    ) -> anyhow::Result<T> {
+        let (val, index) = parse_with_mut_fn(self, context)?;
         self.go_to(index);
         Ok(val)
     }
