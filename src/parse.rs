@@ -69,8 +69,10 @@ impl<T> TokenQueue<T> {
         Ok(self.prev()?)
     }
 
+    /// Return `Ok(())` if the index is valid in this token queue, else return
+    /// an error.
     pub fn validate_idx(&self, idx: usize) -> anyhow::Result<()> {
-        if idx >= self.tokens.len() {
+        if idx > self.tokens.len() {
             return Err(anyhow::anyhow!("Prematurely reached end of input!"));
         }
         Ok(())
